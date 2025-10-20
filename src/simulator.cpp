@@ -4,8 +4,10 @@
 #include <string>
 #include <vector>
 
+//FIXME - просто исполнение бинарного файла, из аргументов командной строки должен быть только один - бинарник исполняеой прграммы, больше ничего
+
 static bool parse_set_reg(const std::string &arg, Sim::Simulator &sim);
-static bool parse_command_line_args(int argc, char *argv[], Sim::Simulator &sim, std::string &program_path);
+static bool parse_command_line_args(int argc, char *argv[], Sim::Simulator &sim, std::filesystem::path &program_path);
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -15,7 +17,7 @@ int main(int argc, char *argv[]) {
     }
 
     Sim::Simulator simulator;
-    std::string program_path;
+    std::filesystem::path program_path;
 
     if (!parse_command_line_args(argc, argv, simulator, program_path)) {
         return 1;
@@ -41,8 +43,8 @@ static bool parse_set_reg(const std::string &arg, Sim::Simulator &sim) {
 
     if (eq == std::string::npos) return false;
     try {
-        unsigned long idx = std::stoul(s.substr(0, eq), nullptr, 0);
-        unsigned long val = std::stoul(s.substr(eq + 1), nullptr, 0);
+        uint64_t idx = std::stoul(s.substr(0, eq), nullptr, 0);
+        uint64_t val = std::stoul(s.substr(eq + 1), nullptr, 0);
         sim.set_register(static_cast<uint32_t>(idx), static_cast<uint32_t>(val));
     } catch (...) {
         return false;
@@ -51,7 +53,7 @@ static bool parse_set_reg(const std::string &arg, Sim::Simulator &sim) {
     return true;
 }
 
-static bool parse_command_line_args(int argc, char *argv[], Sim::Simulator &sim, std::string &program_path) {
+static bool parse_command_line_args(int argc, char *argv[], Sim::Simulator &sim, std::filesystem::path &program_path) {
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 

@@ -7,6 +7,8 @@
 namespace Sim {
 
 constexpr size_t kNumberOfRegisters = 32;
+constexpr size_t kInstructionBytes =  4;
+constexpr size_t kNumberOfBits =      32;
 
 using Register =    uint32_t;
 using Address =     uint32_t;

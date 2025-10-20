@@ -5,6 +5,7 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
+#include <filesystem>
 
 namespace Sim {
 
@@ -16,7 +17,7 @@ void CPU::reset() {
     std::cerr << "CPU reset complete successfully.\n\n";
 }
 
-bool CPU::load_program(const std::string &path, Address base) {
+bool CPU::load_program(const std::filesystem::path &path, Address base) {
     std::ifstream instr_file(path, std::ios::binary);
     if (!instr_file) {
         std::cerr << "CPU: Error in load program - cannot open file: " << path << "\n";
@@ -36,8 +37,72 @@ bool CPU::load_program(const std::string &path, Address base) {
     return true;
 }
 
+void CPU::run() {
+    while (!halted_) {
+        step();
+    }
+}
+
+void CPU::step() {
+    Instruction instr = read(pc_);
+    Address next_pc = pc_ + kInstructionBytes;
+
+    DecodedInstr decoded = decode_opcode(instr);
+
+    switch (decoded) {
+        case DecodedInstr::j:
+            exec_j(instr, next_pc);
+            break;
+        case DecodedInstr::syscall:
+            exec_syscall(instr, next_pc);
+            break;
+        case DecodedInstr::stp:
+            exec_stp(instr, next_pc);
+            break;
+        case DecodedInstr::rori:
+            exec_rori(instr, next_pc);
+            break;
+        case DecodedInstr::slti:
+            exec_slti(instr, next_pc);
+            break;
+        case DecodedInstr::st:
+            exec_st(instr, next_pc);
+            break;
+        case DecodedInstr::bdep:
+            exec_bdep(instr, next_pc);
+            break;
+        case DecodedInstr::cls:
+            exec_cls(instr, next_pc);
+            break;
+        case DecodedInstr::add:
+            exec_add(instr, next_pc);
+            break;
+        case DecodedInstr::bne:
+            exec_bne(instr, next_pc);
+            break;
+        case DecodedInstr::beq:
+            exec_beq(instr, next_pc);
+            break;
+        case DecodedInstr::ld:
+            exec_ld(instr, next_pc);
+            break;
+        case DecodedInstr::and_:
+            exec_and(instr, next_pc);
+            break;
+        case DecodedInstr::ssat:
+            exec_ssat(instr, next_pc);
+            break;
+        case DecodedInstr::unknown:
+            std::cerr << "Unknown decoded opcode at pc 0x" << std::hex << pc_ << std::dec << ", CPU halted.\n";
+            halted_ = true;
+            break;
+    }
+
+    pc_ = next_pc;
+}
+
 Instruction CPU::read(Address addr) {
-    if (addr > memory_.size() - 4) {
+    if (addr > memory_.size() - kInstructionBytes) {
         std::cerr << "Error in read: out-of-range read at 0x" << std::hex << addr << std::dec << "\n";
         return 0;
     }
@@ -51,51 +116,51 @@ Instruction CPU::read(Address addr) {
 }
 
 void CPU::write(Address addr, uint32_t value) {
-    size_t need = static_cast<size_t>(addr) + 4;
+    size_t need = static_cast<size_t>(addr) + kInstructionBytes;
     if (need > memory_.size()) {
         memory_.resize(need, 0);
     }
 
-    memory_[addr]     = static_cast<Opcode>(value & 0xFFu);
-    memory_[addr + 1] = static_cast<Opcode>((value >> 8) & 0xFFu);
-    memory_[addr + 2] = static_cast<Opcode>((value >> 16) & 0xFFu);
-    memory_[addr + 3] = static_cast<Opcode>((value >> 24) & 0xFFu);
+    memory_[addr]     = static_cast<Opcode>(value & 0x0000'00FF);
+    memory_[addr + 1] = static_cast<Opcode>((value >> 8) & 0x0000'00FF);
+    memory_[addr + 2] = static_cast<Opcode>((value >> 16) & 0x0000'00FF);
+    memory_[addr + 3] = static_cast<Opcode>((value >> 24) & 0x0000'00FF);
 }
 
 Opcode CPU::opcode_of(Instruction instr) {
-    return (static_cast<Opcode>((instr >> 26) & 0x3Fu));
+    return (static_cast<Opcode>((instr >> 26) & 0x0000'003F));
 }
 
 Opcode CPU::func_of(Instruction instr) {
-    return (static_cast<Opcode>(instr & 0x3Fu));
+    return (static_cast<Opcode>(instr & 0x0000'003F));
 }
 
 Register  CPU::sign_extend(Register v) {
-    if (v & 0x8000u) {
-        return static_cast<Register>(v | 0xFFFF0000u);
+    if (v & 0x0000'8000) {
+        return static_cast<Register>(v | 0xFFFF'0000);
     }
-    return static_cast<Register>(v & 0x0000FFFFu);
+    return static_cast<Register>(v & 0x0000'FFFF);
 }
 
-Register  CPU::rot_r(Register v, unsigned n) {
-    n &= 31u;
+Register  CPU::rot_r(Register v, uint32_t n) {
+    n &= 0x0000'001F;
 
     if (n == 0) {
         return v;
     }
-    return static_cast<Register>((v >> n) | (v << (32 - n)));
+    return static_cast<Register>((v >> n) | (v << (kNumberOfBits - n)));
 }
 
 Register CPU::pdep_emulate(Register src, uint32_t mask) {
     Register result = 0;
 
-    for (unsigned mask_bit_pos = 0; mask_bit_pos < 32; ++mask_bit_pos) {
-        uint32_t mask_bit = (mask >> mask_bit_pos) & 1u;
-        if (mask_bit != 0u) {
-            Register src_lsb = src & 1u;
+    for (uint32_t mask_bit_pos = 0; mask_bit_pos < kNumberOfBits; ++mask_bit_pos) {
+        uint32_t mask_bit = (mask >> mask_bit_pos) & 0x0000'0001;
+        if (mask_bit != 0x0000'0000) {
+            Register src_lsb = src & 0x0000'0001;
 
-            if (src_lsb != 0u) {
-                result |= (static_cast<Register>(1u) << mask_bit_pos);
+            if (src_lsb != 0) {
+                result |= (static_cast<Register>(0x0000'0001) << mask_bit_pos);
             }
             src >>= 1;
         }
@@ -104,15 +169,15 @@ Register CPU::pdep_emulate(Register src, uint32_t mask) {
 }
 
 Register CPU::cls_emulate(Register x) {
-    Register sign = (x >> 31) & 1u;
+    Register sign = (x >> kNumberOfBits - 1) & 0x0000'0001;
 
-    unsigned count = 0;
-    for (int pos = 31; pos >= 0; --pos) {
-        Register bit = (x >> pos) & 1u;
+    uint32_t count = 0;
+    for (int pos = kNumberOfBits - 1; pos >= 0; --pos) {
+        Register bit = (x >> pos) & 0x0000'0001;
         if (bit == sign) {
             ++count;
-            if (count >= 31) {
-                return static_cast<Register>(31u);
+            if (count >= kNumberOfBits - 1) {
+                return static_cast<Register>(0x0000'001F);
             }
         } else {
             break;
@@ -122,129 +187,64 @@ Register CPU::cls_emulate(Register x) {
     return static_cast<Register>(count);
 }
 
-void CPU::run() {
-    while (!halted_) {
-        step();
-    }
-}
-
 DecodedInstr CPU::decode_opcode(Instruction instr) {
     Opcode op = opcode_of(instr);
     InstrOpcodes upper_bits = static_cast<InstrOpcodes>(op);
     if (upper_bits != InstrOpcodes::syscall) {
         switch (upper_bits) {
             case InstrOpcodes::j:
-                return DecodedInstr::J;
+                return DecodedInstr::j;
             case InstrOpcodes::stp:
-                return DecodedInstr::STP;
+                return DecodedInstr::stp;
             case InstrOpcodes::rori:
-                return DecodedInstr::RORI;
+                return DecodedInstr::rori;
             case InstrOpcodes::slti:
-                return DecodedInstr::SLTI;
+                return DecodedInstr::slti;
             case InstrOpcodes::st:
-                return DecodedInstr::ST;
+                return DecodedInstr::st;
             case InstrOpcodes::bne:
-                return DecodedInstr::BNE;
+                return DecodedInstr::bne;
             case InstrOpcodes::beq:
-                return DecodedInstr::BEQ;
+                return DecodedInstr::beq;
             case InstrOpcodes::ld:
-                return DecodedInstr::LD;
+                return DecodedInstr::ld;
             case InstrOpcodes::ssat:
-                return DecodedInstr::SSAT;
+                return DecodedInstr::ssat;
             default:
                 std::cerr << "Unknown primary opcode: 0x" << std::hex << int(op) << " at pc 0x" << pc_ << std::dec << "\n";
                 halted_ = true;
-                return DecodedInstr::UNKNOWN;
+                return DecodedInstr::unknown;
         }
     }
 
     Opcode func = func_of(instr);
     switch (static_cast<SubEncoding>(func)) {
         case SubEncoding::add:
-            return DecodedInstr::ADD;
+            return DecodedInstr::add;
         case SubEncoding::and_:
-            return DecodedInstr::AND;
+            return DecodedInstr::and_;
         case SubEncoding::bdep:
-            return DecodedInstr::BDEP;
+            return DecodedInstr::bdep;
         case SubEncoding::cls:
-            return DecodedInstr::CLS;
+            return DecodedInstr::cls;
         case SubEncoding::syscall:
-            return DecodedInstr::SYSCALL;
+            return DecodedInstr::syscall;
         default:
             std::cerr << "Unknown subencoding: 0x" << std::hex << int(func) << " at pc 0x" << pc_ << std::dec << "\n";
             halted_ = true;
-            return DecodedInstr::UNKNOWN;
+            return DecodedInstr::unknown;
     }
 }
-
-void CPU::step() {
-    Instruction instr = read(pc_);
-    Address next_pc = pc_ + 4;
-
-    DecodedInstr decoded = decode_opcode(instr);
-
-    switch (decoded) {
-        case DecodedInstr::J:
-            exec_j(instr, next_pc);
-            break;
-        case DecodedInstr::SYSCALL:
-            exec_syscall(instr, next_pc);
-            break;
-        case DecodedInstr::STP:
-            exec_stp(instr, next_pc);
-            break;
-        case DecodedInstr::RORI:
-            exec_rori(instr, next_pc);
-            break;
-        case DecodedInstr::SLTI:
-            exec_slti(instr, next_pc);
-            break;
-        case DecodedInstr::ST:
-            exec_st(instr, next_pc);
-            break;
-        case DecodedInstr::BDEP:
-            exec_bdep(instr, next_pc);
-            break;
-        case DecodedInstr::CLS:
-            exec_cls(instr, next_pc);
-            break;
-        case DecodedInstr::ADD:
-            exec_add(instr, next_pc);
-            break;
-        case DecodedInstr::BNE:
-            exec_bne(instr, next_pc);
-            break;
-        case DecodedInstr::BEQ:
-            exec_beq(instr, next_pc);
-            break;
-        case DecodedInstr::LD:
-            exec_ld(instr, next_pc);
-            break;
-        case DecodedInstr::AND:
-            exec_and(instr, next_pc);
-            break;
-        case DecodedInstr::SSAT:
-            exec_ssat(instr, next_pc);
-            break;
-        case DecodedInstr::UNKNOWN:
-            std::cerr << "Unknown decoded opcode at pc 0x" << std::hex << pc_ << std::dec << ", CPU halted.\n";
-            halted_ = true;
-            break;
-    }
-
-    pc_ = next_pc;
-}
-
 
 //---------------------- dump -------------------------
-void CPU::dump_regs() {
+void CPU::dump_regs() const {
     std::ios::fmtflags f = std::cout.flags();
     std::cout << "----- CPU REGISTER DUMP -----\n";
     std::cout << "PC = 0x" << std::hex << pc_ << std::dec << "\n";
 
     for (Register i = 0; i < static_cast<Register>(kNumberOfRegisters); ++i) {
         std::cout << "X" << i << " = 0x" << std::hex << regs_[i] << std::dec;
-        if ((i % 4) == 3) std::cout << "\n"; else std::cout << "\t";
+        if ((i % kInstructionBytes) == 3) std::cout << "\n"; else std::cout << "\t";
     }
     std::cout << "\n----- END OF DUMP -----\n";
     std::cout.flags(f);
@@ -252,12 +252,12 @@ void CPU::dump_regs() {
 
 //------------------ instructions ---------------------
 void CPU::exec_j(Instruction instr, Address &next_pc) {
-    Instruction instr_index = instr & 0x03FFFFFFu;
-    next_pc = static_cast<Address>((pc_ & 0xF0000000u) | (instr_index << 2));
+    Instruction instr_index = instr & 0x03FF'FFFF;
+    next_pc = static_cast<Address>((pc_ & 0xF000'0000) | (instr_index << 2));
 }
 
 void CPU::exec_syscall(Instruction instr, Address &next_pc) {
-    Register code = static_cast<Register>(instr >> 6) & 0x3FFFFu;
+    Register code = static_cast<Register>(instr >> 6) & 0x0003'FFFF;
 
     if (code == 0) {
         halted_ = true;
@@ -269,35 +269,34 @@ void CPU::exec_syscall(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_stp(Instruction instr, Address &next_pc) {
-    Register base = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt1 = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Register rt2 = static_cast<Register>((instr >> 11) & 0x1Fu);
-    Address offset = static_cast<Address>(instr & 0x7FFu);
+    Register base = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt1 = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register rt2 = static_cast<Register>((instr >> 11) & 0x0000'001F);
+    Address offset = static_cast<Address>(instr & 0x0000'07FF);
 
-        if (base >= kNumberOfRegisters
-            || rt1 >= kNumberOfRegisters
-            || rt2 >= kNumberOfRegisters) {
-        std::cerr << "exec_stp: bad register index, halting.\n";
-        halted_ = true;
-        return;
+    if (base >= kNumberOfRegisters
+        || rt1 >= kNumberOfRegisters
+        || rt2 >= kNumberOfRegisters) {
+    std::cerr << "exec_stp: bad register index, halting.\n";
+    halted_ = true;
+    return;
     }
+    Address addr = regs_[base] + offset;
 
-    if ((offset & 0x3u) != 0u) {
+    if ((addr & 0x0000'0003) != 0) {
         std::cerr << "exec_stp:  lowest 2 bits of offset must be zero: 0x" << std::hex << offset << std::dec << ", halting.\n";
         halted_ = true;
         return;
     }
 
-    Address addr = regs_[base] + offset;
-
     write(addr, regs_[rt1]);
-    write(addr + 4, regs_[rt2]);
+    write(addr + kInstructionBytes, regs_[rt2]);
 }
 
 void CPU::exec_rori(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rs = static_cast<Register>((instr >> 16) & 0x1Fu);
-    unsigned imm5 = (instr >> 11) & 0x1Fu;
+    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rs = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    uint32_t imm5 = (instr >> 11) & 0x0000'001F;
 
     if (rd >= kNumberOfRegisters
         || rs >= kNumberOfRegisters) {
@@ -310,8 +309,8 @@ void CPU::exec_rori(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_slti(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
+    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -320,15 +319,15 @@ void CPU::exec_slti(Instruction instr, Address &next_pc) {
         return;
     }
 
-    int32_t imm = sign_extend(instr & 0xFFFFu);
+    int32_t imm = sign_extend(instr & 0x0000'FFFF);
 
-    regs_[rt] = (static_cast<int32_t>(regs_[rs]) < imm) ? 1u : 0u;
+    regs_[rt] = (static_cast<int32_t>(regs_[rs]) < imm) ? 0x0000'0001 : 0x0000'0000;
 }
 
 void CPU::exec_st(Instruction instr, Address &next_pc) {
-    Register base = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Address offset = static_cast<Address>(instr & 0xFFFFu);
+    Register base = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Address offset = static_cast<Address>(instr & 0x0000'FFFF);
 
     if (base >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -337,7 +336,7 @@ void CPU::exec_st(Instruction instr, Address &next_pc) {
         return;
     }
 
-    if ((offset & 0x3u) != 0u) {
+    if ((offset & 0x3u) != 0x0000'0000) {
         std::cerr << "exec_st: lowest 2 bits of offset must be zero: 0x" << std::hex << offset << std::dec << ", halting.\n";
         halted_ = true;
         return;
@@ -349,9 +348,9 @@ void CPU::exec_st(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_bdep(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rs1 = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Register rs2 = static_cast<Register>((instr >> 11) & 0x1Fu);
+    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rs1 = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register rs2 = static_cast<Register>((instr >> 11) & 0x0000'001F);
 
     if (rd >= kNumberOfRegisters
         || rs1 >= kNumberOfRegisters
@@ -365,8 +364,8 @@ void CPU::exec_bdep(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_cls(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rs = static_cast<Register>((instr >> 16) & 0x1Fu);
+    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rs = static_cast<Register>((instr >> 16) & 0x0000'001F);
 
     if (rd >= kNumberOfRegisters
         || rs >= kNumberOfRegisters) {
@@ -379,9 +378,9 @@ void CPU::exec_cls(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_add(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Register rd = static_cast<Register>((instr >> 11) & 0x1Fu);
+    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register rd = static_cast<Register>((instr >> 11) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters
@@ -395,8 +394,8 @@ void CPU::exec_add(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_bne(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
+    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -405,7 +404,7 @@ void CPU::exec_bne(Instruction instr, Address &next_pc) {
         return;
     }
 
-    Instruction imm16 = instr & 0xFFFFu;
+    Instruction imm16 = instr & 0x0000'FFFF;
     Address offset = sign_extend(imm16) << 2;
 
     if (regs_[rs] != regs_[rt]) {
@@ -414,8 +413,8 @@ void CPU::exec_bne(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_beq(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
+    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -424,7 +423,7 @@ void CPU::exec_beq(Instruction instr, Address &next_pc) {
         return;
     }
 
-    Instruction imm16 = instr & 0xFFFFu;
+    Instruction imm16 = instr & 0x0000'FFFF;
     Address offset = static_cast<Address>(sign_extend(imm16)) << 2;
 
     if (regs_[rs] == regs_[rt]) {
@@ -433,9 +432,9 @@ void CPU::exec_beq(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_ld(Instruction instr, Address &next_pc) {
-    Register base = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Address offset = static_cast<Address>(instr & 0xFFFFu);
+    Register base = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Address offset = static_cast<Address>(instr & 0x0000'FFFF);
 
     if (base >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -444,7 +443,7 @@ void CPU::exec_ld(Instruction instr, Address &next_pc) {
         return;
     }
 
-    if ((offset & 0x3u) != 0u) {
+    if ((offset & 0x0000'0003) != 0x0000'0000) {
         std::cerr << "exec_ld: lowest 2 bits of offset must be zero: 0x" << std::hex << offset << std::dec << ", halting.\n";
         halted_ = true;
         return;
@@ -455,9 +454,9 @@ void CPU::exec_ld(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_and(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rt = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Register rd = static_cast<Register>((instr >> 11) & 0x1Fu);
+    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register rd = static_cast<Register>((instr >> 11) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters
@@ -471,9 +470,9 @@ void CPU::exec_and(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_ssat(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x1Fu);
-    Register rs = static_cast<Register>((instr >> 16) & 0x1Fu);
-    Register imm5 = static_cast<Register>((instr >> 11) & 0x1Fu);
+    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
+    Register rs = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register imm5 = static_cast<Register>((instr >> 11) & 0x0000'001F);
 
     if (rd >= kNumberOfRegisters
         || rs >= kNumberOfRegisters) {
@@ -482,21 +481,21 @@ void CPU::exec_ssat(Instruction instr, Address &next_pc) {
         return;
     }
 
-    Register N = imm5;
+    const Register N = imm5 & 0x1Fu;
     if (N == 0) {
         regs_[rd] = regs_[rs];
         return;
     }
 
-    int64_t minv = - (1LL << (N - 1));
-    int64_t maxv =  (1LL << (N - 1)) - 1;
+    const int64_t minv = -(1LL << (N - 1));
+    const int64_t maxv = (1LL << (N - 1)) - 1;
 
-    int64_t val = static_cast<Register>(regs_[rs]);
+    int64_t val = static_cast<int64_t>(static_cast<int32_t>(regs_[rs]));
 
     if (val < minv) val = minv;
     if (val > maxv) val = maxv;
 
-    regs_[rd] = static_cast<Register>(val);
+    regs_[rd] = static_cast<Register>(static_cast<int32_t>(val));
 }
 
 } // namespace Sim

@@ -4,17 +4,19 @@
 #include "config.hpp"
 #include "instructions.hpp"
 
-#include <iostream>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <string>
 #include <vector>
 #include <unordered_map>
-#include <string>
 
 namespace Sim {
 
 class CPU {
 private:
-    std::vector<uint8_t> memory_;
+    std::vector<Opcode> memory_;
     Register regs_[kNumberOfRegisters];
     Address pc_;
     bool halted_;
@@ -26,9 +28,9 @@ private:
     DecodedInstr decode_opcode(Instruction instr);
 
     Register sign_extend(Register v);
-    Register rot_r(Register  v, unsigned n);
-    Register pdep_emulate(Register  src, uint32_t mask);
-    Register cls_emulate(Register  x);
+    Register rot_r(Register v, uint32_t n);
+    Register pdep_emulate(Register src, uint32_t mask);
+    Register cls_emulate(Register x);
 
     void exec_j(Instruction instr, Address &next_pc);
     void exec_syscall(Instruction instr, Address &next_pc);
@@ -50,16 +52,15 @@ public:
     ~CPU() = default;
 
     void reset();
-    bool load_program(const std::string &path, Address base = 0);
+    bool load_program(const std::filesystem::path &path, Address base = 0);
     void run();
     void step();
-    void dump_regs();
 
-    void set_PC(Address addr) {
+    void set_PC(const Address addr) {
         pc_ = addr;
     }
 
-    void set_register(unsigned int idx, uint32_t value) {
+    void set_register(const Register idx, const Register value) {
         if (idx < kNumberOfRegisters) regs_[idx] = value;
     }
 
@@ -67,10 +68,12 @@ public:
         return pc_;
     }
 
-    uint32_t get_register(unsigned int idx) const {
+    Register get_register(Register idx) const {
         if (idx < kNumberOfRegisters) return regs_[idx];
         return 0;
     }
+
+    void dump_regs() const;
 };
 
 } // namespace Sim

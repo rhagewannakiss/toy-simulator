@@ -29,21 +29,21 @@ enum class SubEncoding {
 };
 
 enum class DecodedInstr {
-    J,
-    SYSCALL,
-    STP,
-    RORI,
-    SLTI,
-    ST,
-    BDEP,
-    CLS,
-    ADD,
-    BNE,
-    BEQ,
-    LD,
-    AND,
-    SSAT,
-    UNKNOWN
+    j,
+    syscall,
+    stp,
+    rori,
+    slti,
+    st,
+    bdep,
+    cls,
+    add,
+    bne,
+    beq,
+    ld,
+    and_,
+    ssat,
+    unknown
 };
 
 } // namespace Sim

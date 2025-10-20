@@ -29,7 +29,7 @@ public:
         return cpu_.load_program(file_path, 0);
     }
 
-    void set_register(uint32_t index, uint32_t value) {
+    void set_register(Register index, uint32_t value) {
         cpu_.set_register(index, value);
     }
 
@@ -42,9 +42,8 @@ public:
     }
 
     void dump_final_state() const {
-        CPU temp_cpu = cpu_;
         std::cout << "\n--- Simulation Finished ---\n";
-        temp_cpu.dump_regs();
+        cpu_.dump_regs();
     }
 };
 
