@@ -6,7 +6,7 @@
 
 namespace Sim {
 
-class Simulator{
+class Simulator {
 private:
     CPU cpu_;
     Register entry_point_;
@@ -25,11 +25,27 @@ public:
         return cpu_;
     }
 
-    bool load_program(const std::string &file_path);
-    void set_register(uint32_t index, uint32_t value);
-    void set_pc(Address address);
-    void run();
-    void dump_final_state() const;
+    bool load_program(const std::string &file_path) {
+        return cpu_.load_program(file_path, 0);
+    }
+
+    void set_register(uint32_t index, uint32_t value) {
+        cpu_.set_register(index, value);
+    }
+
+    void set_pc(Address address) {
+        cpu_.set_PC(address);
+    }
+
+    void run() {
+        cpu_.run();
+    }
+
+    void dump_final_state() const {
+        CPU temp_cpu = cpu_;
+        std::cout << "\n--- Simulation Finished ---\n";
+        temp_cpu.dump_regs();
+    }
 };
 
 } // namespace Sim

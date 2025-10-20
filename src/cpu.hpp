@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "instructions.hpp"
 
+#include <iostream>
 #include <cstdint>
 #include <vector>
 #include <unordered_map>
@@ -22,11 +23,12 @@ private:
     void write(Address addr, uint32_t value);
     Opcode opcode_of(Instruction instr);
     Opcode func_of(Instruction instr);
+    DecodedInstr decode_opcode(Instruction instr);
 
-    Register  sign_extend(Register v);
-    Register  rot_r(Register  v, unsigned n);
-    Register  pdep_emulate(Register  src, uint32_t mask);
-    Register  cls_emulate(Register  x);
+    Register sign_extend(Register v);
+    Register rot_r(Register  v, unsigned n);
+    Register pdep_emulate(Register  src, uint32_t mask);
+    Register cls_emulate(Register  x);
 
     void exec_j(Instruction instr, Address &next_pc);
     void exec_syscall(Instruction instr, Address &next_pc);
@@ -71,6 +73,6 @@ public:
     }
 };
 
-} //namespace Sim
+} // namespace Sim
 
 #endif //CPU_HPP_

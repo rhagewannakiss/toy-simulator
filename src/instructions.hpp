@@ -3,31 +3,49 @@
 
 namespace Sim {
 
-    enum class InstrOpcodes {
-        j =       0b100111,
-        syscall = 0b000000, //*
-        stp =     0b001000,
-        rori =    0b111011,
-        slti =    0b010110,
-        st =      0b000011,
-        bdep =    0b000000, //*
-        cls =     0b000000, //*
-        add =     0b000000, //*
-        bne =     0b100100,
-        beq =     0b000010,
-        ld =      0b011010,
-        and_ =    0b000000, //*
-        ssat =    0b001111
-    };
+enum class InstrOpcodes {
+    j =       0b1001'11,
+    syscall = 0b0000'00, //*
+    stp =     0b0010'00,
+    rori =    0b1110'11,
+    slti =    0b0101'10,
+    st =      0b0000'11,
+    bdep =    0b0000'00, //*
+    cls =     0b0000'00, //*
+    add =     0b0000'00, //*
+    bne =     0b1001'00,
+    beq =     0b0000'10,
+    ld =      0b0110'10,
+    and_ =    0b0000'00, //*
+    ssat =    0b0011'11
+};
 
-    enum class SubEncoding {
-        syscall = 0b111110,
-        bdep =    0b111010,
-        cls =     0b111001,
-        add =     0b101011,
-        and_ =    0b101101
-    };
+enum class SubEncoding {
+    syscall = 0b1111'10,
+    bdep =    0b1110'10,
+    cls =     0b1110'01,
+    add =     0b1010'11,
+    and_ =    0b1011'01
+};
 
-} //namespace Sim
+enum class DecodedInstr {
+    J,
+    SYSCALL,
+    STP,
+    RORI,
+    SLTI,
+    ST,
+    BDEP,
+    CLS,
+    ADD,
+    BNE,
+    BEQ,
+    LD,
+    AND,
+    SSAT,
+    UNKNOWN
+};
+
+} // namespace Sim
 
 #endif //INSTRUCTIONS_HPP_

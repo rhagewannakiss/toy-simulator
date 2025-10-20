@@ -4,6 +4,9 @@
 #include <string>
 #include <vector>
 
+static bool parse_set_reg(const std::string &arg, Sim::Simulator &sim);
+static bool parse_command_line_args(int argc, char *argv[], Sim::Simulator &sim, std::string &program_path);
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <program.bin> [--set-reg INDEX=VALUE] [--pc START_ADDRESS]\n";
@@ -14,81 +17,12 @@ int main(int argc, char *argv[]) {
     Sim::Simulator simulator;
     std::string program_path;
 
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-
-        if (arg.rfind("--set-reg=", 0) == 0) {
-            std::string reg_val = arg.substr(10);
-            size_t separator_pos = reg_val.find('=');
-            if (separator_pos == std::string::npos) {
-                std::cerr << "Invalid format for --set-reg. Use --set-reg=INDEX=VALUE or --set-reg INDEX=VALUE\n";
-                return 1;
-            }
-            try {
-                uint32_t index = std::stoul(reg_val.substr(0, separator_pos));
-                uint32_t value = std::stoul(reg_val.substr(separator_pos + 1));
-                simulator.set_register(index, value);
-            } catch (const std::exception& e) {
-                std::cerr << "Error parsing register value: " << e.what() << "\n";
-                return 1;
-            }
-        } else if (arg == "--set-reg") {
-            if (i + 1 >= argc) {
-                std::cerr << "Missing argument for --set-reg\n";
-                return 1;
-            }
-            std::string reg_val = argv[++i];
-            size_t separator_pos = reg_val.find('=');
-            if (separator_pos == std::string::npos) {
-                std::cerr << "Invalid format for --set-reg. Use --set-reg=INDEX=VALUE or --set-reg INDEX=VALUE\n";
-                return 1;
-            }
-            try {
-                uint32_t index = std::stoul(reg_val.substr(0, separator_pos));
-                uint32_t value = std::stoul(reg_val.substr(separator_pos + 1));
-                simulator.set_register(index, value);
-            } catch (const std::exception& e) {
-                std::cerr << "Error parsing register value: " << e.what() << "\n";
-                return 1;
-            }
-        } else if (arg.rfind("--pc=", 0) == 0) {
-            std::string pc_val = arg.substr(5);
-            try {
-                uint32_t addr = std::stoul(pc_val, nullptr, 0);
-                simulator.set_pc(addr);
-            } catch (const std::exception& e) {
-                std::cerr << "Error parsing PC address: " << e.what() << "\n";
-                return 1;
-            }
-        } else if (arg == "--pc") {
-            if (i + 1 >= argc) {
-                std::cerr << "Missing argument for --pc\n";
-                return 1;
-            }
-            std::string pc_val = argv[++i];
-            try {
-                uint32_t addr = std::stoul(pc_val, nullptr, 0);
-                simulator.set_pc(addr);
-            } catch (const std::exception& e) {
-                std::cerr << "Error parsing PC address: " << e.what() << "\n";
-                return 1;
-            }
-        } else {
-            if (!program_path.empty()) {
-                std::cerr << "Error: Program path specified more than once.\n";
-                return 1;
-            }
-            program_path = arg;
-        }
-    }
-
-    if (program_path.empty()) {
-        std::cerr << "Error: No program binary file specified.\n";
+    if (!parse_command_line_args(argc, argv, simulator, program_path)) {
         return 1;
-    }
+    };
 
     if (!simulator.load_program(program_path)) {
-        std::cerr << "Failed to load program: " << program_path << "\n";
+        std::cerr <<"Failed tp load programm: " << program_path << "\n";
         return 1;
     }
 
@@ -101,29 +35,87 @@ int main(int argc, char *argv[]) {
 }
 
 
+static bool parse_set_reg(const std::string &arg, Sim::Simulator &sim) {
+    std::string s = arg;
+    size_t eq = s.find('=');
 
-namespace Sim {
-
-    bool Simulator::load_program(const std::string &file_path) {
-        return cpu_.load_program(file_path, 0);
+    if (eq == std::string::npos) return false;
+    try {
+        unsigned long idx = std::stoul(s.substr(0, eq), nullptr, 0);
+        unsigned long val = std::stoul(s.substr(eq + 1), nullptr, 0);
+        sim.set_register(static_cast<uint32_t>(idx), static_cast<uint32_t>(val));
+    } catch (...) {
+        return false;
     }
 
-    void Simulator::set_register(uint32_t index, uint32_t value) {
-        cpu_.set_register(index, value);
+    return true;
+}
+
+static bool parse_command_line_args(int argc, char *argv[], Sim::Simulator &sim, std::string &program_path) {
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+
+        if (arg.rfind("--set-reg=", 0) == 0) {
+            std::string kv = arg.substr(10);
+            if (!parse_set_reg(kv, sim)) {
+                std::cerr << "Invalid format for --set-reg. Use --set-reg=INDEX=VALUE or --set-reg INDEX=VALUE\n";
+                return false;
+            }
+            continue;
+        }
+
+        if (arg == "--set-reg") {
+            if (i + 1 >= argc) {
+                std::cerr << "Missing argument for --set-reg\n";
+                return false;
+            }
+            ++i;
+            if (!parse_set_reg(argv[i], sim)) {
+                std::cerr << "Invalid format for --set-reg. Use --set-reg=INDEX=VALUE or --set-reg INDEX=VALUE\n";
+                return false;
+            }
+            continue;
+        }
+
+        if (arg.rfind("--pc=", 0) == 0) {
+            std::string pc_val = arg.substr(5);
+            try {
+                uint32_t addr = static_cast<uint32_t>(std::stoul(pc_val, nullptr, 0));
+                sim.set_pc(addr);
+            } catch (const std::exception &e) {
+                std::cerr << "Error parsing PC address: " << e.what() << "\n";
+                return false;
+            }
+            continue;
+        }
+
+        if (arg == "--pc") {
+            if (i + 1 >= argc) {
+                std::cerr << "Missing argument for --pc\n";
+                return false;
+            }
+            ++i;
+            try {
+                uint32_t addr = static_cast<uint32_t>(std::stoul(argv[i], nullptr, 0));
+                sim.set_pc(addr);
+            } catch (const std::exception &e) {
+                std::cerr << "Error parsing PC address: " << e.what() << "\n";
+                return false;
+            }
+            continue;
+        }
+
+        if (!program_path.empty()) {
+            std::cerr << "Error: Program path specified more than once.\n";
+            return false;
+        }
+        program_path = arg;
     }
 
-    void Simulator::set_pc(Address address) {
-        cpu_.set_PC(address);
+    if (program_path.empty()) {
+        std::cerr << "Error: No program binary file specified.\n";
+        return false;
     }
 
-    void Simulator::run() {
-        cpu_.run();
-    }
-
-    void Simulator::dump_final_state() const {
-        CPU temp_cpu = cpu_;
-        std::cout << "\n--- Simulation Finished ---\n";
-        temp_cpu.dump_regs();
-    }
-
-} // namespace Sim
+    return true;
+}
