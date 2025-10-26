@@ -28,9 +28,6 @@ cd <your_project_directory>
 Configure and build the C++ simulator using CMake:
 
 ```bash
-# Configure the project for a Release build
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
 # Compile the project using all available CPU cores
 cmake --build build --parallel `nproc`
 ```
@@ -46,13 +43,11 @@ Use the provided Ruby script to convert your .asm source file into a .bin execut
 Command:
 
 ``` bash
-ruby ./src/asm/assembler.rb <input_file.asm> <output_file.bin>
 ruby ./src/asm/run_assembler.rb <input_file.asm> <output_file.bin>
 ```
 Example:
 
 ```Bash
-ruby ./src/asm/assembler.rb fib.asm fib.bin
 ruby /src/asm/run_assembler.rb fib.asm fib.bin
 ```
 
@@ -64,12 +59,12 @@ Execute the compiled simulator, providing the path to your binary file. You can 
 Command Syntax:
 
 ```bash
-./build/toy_cpu <path_to_binary.bin> [--set-reg=INDEX=VALUE] [--pc=ADDRESS]
+./build/toy_cpu <path_to_binary.bin> [x[reg_id]=[value]]
 ```
 Example:
-To run the fib.bin program to calculate fib(12), you need to initialize several registers as required by the program's logic:
+To run the fib.bin program to calculate fib(12), you need to initialize register x1:
 
 ```bash
-./build/bin/toy_cpu fib.bin --set-reg 0=12 --set-reg 1=0 --set-reg 2=1 --set-reg 4=1 --set-reg 5=1
+./build/bin/toy_cpu fib.bin x1=12
 ```
 The simulator will execute the program until a halt syscall is encountered and then print the final state of all CPU registers.
