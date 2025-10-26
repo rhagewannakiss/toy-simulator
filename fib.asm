@@ -1,48 +1,32 @@
-; fib.asm -- computes fib(n)
-; input: X0 = n
-; section .data:
-;   X1 = 0   ; a
-;   X2 = 1   ; b
-;   X4 = 2   ; i
-;   X5 = 1   ; const 1
+start:
+    ADD x2, x0, x0  ; a = 0
+    SLTI x3, x0, #1  ; 1
+    ADD x4, x0, x3  ; i = 1
+    ADD x5, x3, x0  ; b = x5 = 1
 
-        ; if n == 0  print 0
-        BEQ x0, x1, print_zero
-
-        ; if n == 1  print 1
-        BEQ x0, x2, print_one
+    ; if x1 == 0
+    BEQ x1, x2, print_zero
+    ; if x1 == 1
+    BEQ x1, x3, print_one
 
 loop:
-        ; if i == n done (result in b = X2)
-        BEQ x4, x0, done
-
-        ; t = a + b
-        ADD x3, x1, x2
-
-        ; a = b
-        SSAT x1, x2, #0
-
-        ; b = t
-        SSAT x2, x3, #0
-
-        ; i = i + 1
-        ADD x4, x4, x5
-
-        ; if i != n jump back to loop
-        BNE x4, x0, loop
+    ADD x6, x2, x5      ; x6 = a + b
+    ADD x2, x5, x0      ; a = b
+    ADD x5, x6, x0      ; b = a + b
+    ADD x4, x4, x3      ; i++
+    BNE x4, x1, loop    ; i != n
 
 done:
-        ; move b x0 (result)
-        SSAT x0, x2, #0
-        SYSCALL #1        ; print X0
-        SYSCALL #0        ; halt
+    ADD x0, x5, x0
+    SYSCALL #1
+    SYSCALL #0
 
 print_zero:
-        SSAT x0, x1, #0
-        SYSCALL #1
-        SYSCALL #0
+    ADD x0, x2, x0
+    SYSCALL #1
+    SYSCALL #0
 
 print_one:
-        SSAT x0, x2, #0
-        SYSCALL #1
-        SYSCALL #0
+    ADD x0, x5, x0
+    SYSCALL #1
+    SYSCALL #0

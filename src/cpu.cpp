@@ -1,5 +1,4 @@
 #include "cpu.hpp"
-#include "simulator.hpp"
 #include "instructions.hpp"
 
 #include <iostream>

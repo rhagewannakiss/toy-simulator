@@ -32,48 +32,55 @@ class Assembler
 
     private_constant :OPCODE, :SUB_ENCODING, :REG_ALIAS
 
-public
-
-    attr_reader   :pc, :encoded
+    attr_reader :pc, :encoded
 
     def initialize(out_file: "out.bin")
         @out_file = out_file
         @pc = 0
         @encoded = []
         @labels = {}
+        @lines = []
     end
 
     def assemble_from_file(file_path)
-        lines = File.readlines(file_path)
+        @lines = File.readlines(file_path)
 
         # PASS 1
         current_address = 0
-        lines.each do |line|
+        @lines.each do |line|
             clean_line = line.split(';', 2).first.to_s.strip
             next if clean_line.empty?
 
+
             if m = clean_line.match(/\A([A-Za-z_]\w*):(?:\s*(.*))?\z/)
                 label = m[1]
+                rest = m[2]
                 @labels[label] = current_address
-                # if instruction and the label on same line, we count it (pc += 4)
-                instr_after = m[2]
-                current_address += 4 unless instr_after.nil? || instr_after.strip.empty?
+                if rest && !rest.strip.empty?
+                    current_address += 4
+                end
             else
                 current_address += 4
             end
         end
 
-        @pc = 0
-
         # PASS 2
-        lines.each do |line|
+        @pc = 0
+        @lines.each do |line|
             clean_line = line.split(';', 2).first.to_s.strip
             next if clean_line.empty?
 
             if m = clean_line.match(/\A([A-Za-z_]\w*):(?:\s*(.*))?\z/)
                 instr_text = m[2]
-            next if instr_text.nil? || instr_text.strip.empty?
+                next if instr_text.nil? || instr_text.strip.empty?
                 clean_line = instr_text.strip
+            end
+
+            if clean_line =~ /\A([#]?\-?0x[0-9a-fA-F]+|[#]?\-?\-?\d+)\z/
+                val = to_int($1)
+                @encoded << (val & 0xFFFFFFFF)
+                @pc += 4
+                next
             end
 
             parts = clean_line.split(/\s+/, 2)
@@ -83,16 +90,9 @@ public
 
             instr = 'and_' if instr == 'and'
 
-                # memory operand formats for ld/st/stp
-                # expected forms:
-                #   ld rt, offset(base)
-                #   st rt, offset(base)
-                #   stp rt1, rt2, offset(base)
-                # also accept offset being an expression/label or immediate, e.g. label(base) or 4(base) or 0x10(base)
             if ['ld', 'st', 'stp'].include?(instr)
                 if !args.empty?
                     last = args.pop
-
                     if m2 = last.match(/\A(.+?)\((\w+)\)\z/)
                         offset_expr = m2[1].strip
                         base_reg = m2[2].strip
@@ -106,25 +106,26 @@ public
 
             resolved_args = resolve_labels(instr, args)
             final_args = resolved_args.map do |a|
-
-            if a.is_a?(String) && @labels.key?(a)
-                @labels[a]
-            else
-                a
+                if a.is_a?(String) && @labels.key?(a)
+                    @labels[a]
+                else
+                    a
+                end
             end
-        end
 
             begin
                 self.send(instr.to_sym, *final_args)
-            rescue NoMethodError => e
-                raise "Unknown instruction '#{instr}' at pcb=0x#{@pc.to_s(16)} (original line: #{clean_line})"
+            rescue NoMethodError
+                raise "Unknown instruction '#{instr}' at pc=0x#{@pc.to_s(16)} (line: #{clean_line})"
             end
         end
     end
 
     # J target
     def j(target)
+        target = to_int(target)
         raise "J target must be word-aligned: #{target}" unless (target & 0b11) == 0
+
         instr_index = (target >> 2) & 0x03FFFFFF
         word = (OPCODE[:j] << 26) | instr_index
         push_encoded(word)
@@ -143,7 +144,9 @@ public
         rt2_idx = reg_idx(rt2)
         base_adr = reg_idx(base)
         offset_adr = to_int(offset)
+
         raise "STP offset must be word aligned: #{offset_adr}" unless (offset_adr & 0b11) == 0
+
         parsed_offset = offset_adr & 0x7FF
         word = (OPCODE[:stp] << 26) | (base_adr << 21) | (rt1_idx << 16) | (rt2_idx << 11) | parsed_offset
         push_encoded(word)
@@ -154,6 +157,7 @@ public
         rd_idx = reg_idx(rd)
         rs_idx = reg_idx(rs)
         imm5_val = to_int(imm5) & 0x1F
+
         word = (OPCODE[:rori] << 26) | (rd_idx << 21) | (rs_idx << 16) | (imm5_val << 11)
         push_encoded(word)
     end
@@ -163,6 +167,7 @@ public
         rt_idx = reg_idx(rt)
         rs_idx = reg_idx(rs)
         imm_val = to_int(imm) & 0xFFFF
+
         word = (OPCODE[:slti] << 26) | (rs_idx << 21) | (rt_idx << 16) | imm_val
         push_encoded(word)
     end
@@ -172,7 +177,9 @@ public
         rt_idx = reg_idx(rt)
         base_adr = reg_idx(base)
         offset_adr = to_int(offset)
+
         raise "ST offset must be word aligned: #{offset_adr}" unless (offset_adr & 0b11) == 0
+
         parsed_offset = (offset_adr & 0xFFFF)
         word = (OPCODE[:st] << 26) | (base_adr << 21) | (rt_idx << 16) | parsed_offset
         push_encoded(word)
@@ -183,6 +190,7 @@ public
         rd_idx = reg_idx(rd)
         rs1_idx = reg_idx(rs1)
         rs2_idx = reg_idx(rs2)
+
         word = (OPCODE[:bdep] << 26) | (rd_idx << 21) | (rs1_idx << 16) | (rs2_idx << 11) | SUB_ENCODING[:bdep]
         push_encoded(word)
     end
@@ -191,6 +199,7 @@ public
     def cls(rd, rs)
         rd_idx = reg_idx(rd)
         rs_idx = reg_idx(rs)
+
         word = (OPCODE[:cls] << 26) | (rd_idx << 21) | (rs_idx << 16) | SUB_ENCODING[:cls]
         push_encoded(word)
     end
@@ -200,6 +209,7 @@ public
         rd_idx = reg_idx(rd)
         rs_idx = reg_idx(rs)
         rt_idx = reg_idx(rt)
+
         word = (OPCODE[:add] << 26) | (rs_idx << 21) | (rt_idx << 16) | (rd_idx << 11) | SUB_ENCODING[:add]
         push_encoded(word)
     end
@@ -208,7 +218,9 @@ public
     def bne(rs, rt, offset)
         rs_idx = reg_idx(rs)
         rt_idx = reg_idx(rt)
-        word = (OPCODE[:bne] << 26) | (rs_idx << 21) | (rt_idx << 16) | (offset & 0xFFFF)
+        offset_val = to_int(offset) & 0xFFFF
+
+        word = (OPCODE[:bne] << 26) | (rs_idx << 21) | (rt_idx << 16) | offset_val
         push_encoded(word)
     end
 
@@ -216,7 +228,9 @@ public
     def beq(rs, rt, offset)
         rs_idx = reg_idx(rs)
         rt_idx = reg_idx(rt)
-        word = (OPCODE[:beq] << 26) | (rs_idx << 21) | (rt_idx << 16) | (offset & 0xFFFF)
+        offset_val = to_int(offset) & 0xFFFF
+
+        word = (OPCODE[:beq] << 26) | (rs_idx << 21) | (rt_idx << 16) | offset_val
         push_encoded(word)
     end
 
@@ -225,7 +239,9 @@ public
         rt_idx = reg_idx(rt)
         base_adr = reg_idx(base)
         offset_adr = to_int(offset)
+
         raise "LD offset must be word aligned: #{offset_adr}" unless (offset_adr & 0b11) == 0
+
         parsed_offset = (offset_adr & 0xFFFF)
         word = (OPCODE[:ld] << 26) | (base_adr << 21) | (rt_idx << 16) | parsed_offset
         push_encoded(word)
@@ -236,6 +252,7 @@ public
         rd_idx = reg_idx(rd)
         rs_idx = reg_idx(rs)
         rt_idx = reg_idx(rt)
+
         word = (OPCODE[:and_] << 26) | (rs_idx << 21) | (rt_idx << 16) | (rd_idx << 11) | SUB_ENCODING[:and_]
         push_encoded(word)
     end
@@ -245,28 +262,26 @@ public
         rd_idx = reg_idx(rd)
         rs_idx = reg_idx(rs)
         imm5_val = to_int(imm5)
+
         word = (OPCODE[:ssat] << 26) | (rd_idx << 21) | (rs_idx << 16) | ((imm5_val & 0x1F) << 11)
         push_encoded(word)
     end
 
-public
-
     def write_file(path = nil)
-      path ||= @out_file
-      File.open(path, "wb") do |f|
-        @encoded.each { |w| f.write([w].pack("V")) }
-      end
-      puts "Assembled #{@encoded.size} instructions into #{path}"
-      path
+        path ||= @out_file
+        File.open(path, "wb") do |f|
+            @encoded.each { |w| f.write([w].pack("V")) }
+        end
+        path
     end
 
     def dump
-      puts "Label Symbol Table:"
-      @labels.each { |name, addr| puts "  #{name}: 0x#{addr.to_s(16)}" }
-      puts "\nEncoded Instructions:"
-      @encoded.each_with_index do |w, i|
-        puts sprintf("%04d (pc=0x%08X): 0x%08X", i, (i * 4), w)
-      end
+        puts "Label Symbol Table:"
+        @labels.each { |name, addr| puts "  #{name}: 0x#{addr.to_s(16)}" }
+        puts "\nEncoded Instructions:"
+        @encoded.each_with_index do |w, i|
+            puts sprintf("%04d (pc=0x%08X): 0x%08X", i, (i * 4), w)
+        end
     end
 
 private
@@ -303,9 +318,9 @@ private
         return REG_ALIAS[s] if REG_ALIAS.key?(s)
 
         if s =~ /^[xr]?(\d{1,2})$/
-          idx = $1.to_i
-          raise "Register out of range: #{reg}" unless idx.between?(0, 31)
-          return idx
+            idx = $1.to_i
+            raise "Register out of range: #{reg}" unless idx.between?(0, 31)
+            return idx
         end
 
         raise "Bad register name: #{reg.inspect}"

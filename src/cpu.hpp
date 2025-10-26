@@ -22,7 +22,6 @@ private:
     bool halted_;
 
     Instruction read(Address pc_);
-    void write(Address addr, uint32_t value);
     Opcode opcode_of(Instruction instr);
     Opcode func_of(Instruction instr);
     DecodedInstr decode_opcode(Instruction instr);
@@ -53,6 +52,7 @@ public:
 
     void reset();
     bool load_program(const std::filesystem::path &path, Address base = 0);
+    void write(Address addr, uint32_t value);
     void run();
     void step();
 

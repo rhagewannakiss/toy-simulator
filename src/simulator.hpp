@@ -37,6 +37,14 @@ public:
         cpu_.set_PC(address);
     }
 
+    void write_memory(Address addr, uint32_t value) {
+        if ((addr % kInstructionBytes) != 0) {
+            std::cerr << "write_memory: unaligned address 0x" << std::hex << addr << std::dec << "\n";
+            return;
+        }
+        cpu_.write(addr, value);
+    }
+
     void run() {
         cpu_.run();
     }
