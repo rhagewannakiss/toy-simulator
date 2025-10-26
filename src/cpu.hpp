@@ -16,7 +16,7 @@ namespace Sim {
 
 class CPU {
 private:
-    std::vector<Opcode> memory_;
+    std::vector<Byte> memory_;
     Register regs_[kNumberOfRegisters];
     Address pc_;
     bool halted_;
@@ -26,10 +26,10 @@ private:
     Opcode func_of(Instruction instr);
     DecodedInstr decode_opcode(Instruction instr);
 
-    Register sign_extend(Register v);
-    Register rot_r(Register v, uint32_t n);
-    Register pdep_emulate(Register src, uint32_t mask);
-    Register cls_emulate(Register x);
+    Register_idx sign_extend(Register_idx v);
+    Register_idx rot_r(Register_idx v, Register n);
+    Register_idx pdep_emulate(Register_idx src, uint32_t mask);
+    Register_idx cls_emulate(Register_idx x);
 
     void exec_j(Instruction instr, Address &next_pc);
     void exec_syscall(Instruction instr, Address &next_pc);
@@ -52,7 +52,7 @@ public:
 
     void reset();
     bool load_program(const std::filesystem::path &path, Address base = 0);
-    void write(Address addr, uint32_t value);
+    void write(Address addr, Register value);
     void run();
     void step();
 
@@ -60,17 +60,22 @@ public:
         pc_ = addr;
     }
 
-    void set_register(const Register idx, const Register value) {
-        if (idx < kNumberOfRegisters) regs_[idx] = value;
+    void set_register(const Register_idx idx, const Register value) {
+        if (idx >= kNumberOfRegisters) {
+            throw std::out_of_range("Register index out of range/n");
+        }
+        regs_[idx] = value;
     }
 
     Address get_PC() const {
         return pc_;
     }
 
-    Register get_register(Register idx) const {
-        if (idx < kNumberOfRegisters) return regs_[idx];
-        return 0;
+    Register get_register(Register_idx idx) const {
+        if (idx >= kNumberOfRegisters) {
+             throw std::out_of_range("Register index out of range/n");
+        }
+        return regs_[idx];
     }
 
     void dump_regs() const;

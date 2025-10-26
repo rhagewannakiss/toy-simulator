@@ -39,8 +39,8 @@ int main(int argc, char *argv[]) {
         char* reg_last = reg_str.data() + reg_str.size();
 
         std::from_chars_result rc_reg = std::from_chars(reg_first, reg_last, reg_idx, Sim::kBaseOfNumSys10);
-        if (reg_idx > 0xFFFF'FFFF) {
-            std::cerr << "Bad register index in argument: " << arguments << "\n";
+        if (rc_reg.ec != std::errc()) {
+            std::cerr << "Invalid register numder in: " << arguments << "\n";
             return 1;
         }
         if (static_cast<Sim::Register>(reg_idx) >= Sim::kNumberOfRegisters) {

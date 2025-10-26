@@ -14,7 +14,9 @@ constexpr size_t kBaseOfNumSys10 = 10;
 constexpr size_t kBaseOfNumSys16 = 16;
 
 using Register = uint32_t;
+using Register_idx = uint32_t;
 using Address = uint32_t;
+using Byte = uint8_t;
 using Instruction = uint32_t;
 using Opcode = uint8_t;
 

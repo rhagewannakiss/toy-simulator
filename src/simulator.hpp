@@ -21,10 +21,6 @@ public:
 
     ~Simulator() = default;
 
-    CPU get_cpu() const{
-        return cpu_;
-    }
-
     bool load_program(const std::string &file_path) {
         return cpu_.load_program(file_path, 0);
     }

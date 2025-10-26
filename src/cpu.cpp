@@ -134,32 +134,32 @@ Opcode CPU::func_of(Instruction instr) {
     return (static_cast<Opcode>(instr & 0x0000'003F));
 }
 
-Register  CPU::sign_extend(Register v) {
+Register_idx CPU::sign_extend(Register_idx v) {
     if (v & 0x0000'8000) {
-        return static_cast<Register>(v | 0xFFFF'0000);
+        return static_cast<Register_idx>(v | 0xFFFF'0000);
     }
-    return static_cast<Register>(v & 0x0000'FFFF);
+    return static_cast<Register_idx>(v & 0x0000'FFFF);
 }
 
-Register  CPU::rot_r(Register v, uint32_t n) {
+Register_idx CPU::rot_r(Register_idx v, Register n) {
     n &= 0x0000'001F;
 
     if (n == 0) {
         return v;
     }
-    return static_cast<Register>((v >> n) | (v << (kNumberOfBits - n)));
+    return static_cast<Register_idx>((v >> n) | (v << (kNumberOfBits - n)));
 }
 
-Register CPU::pdep_emulate(Register src, uint32_t mask) {
-    Register result = 0;
+Register_idx CPU::pdep_emulate(Register_idx src, uint32_t mask) {
+    Register_idx result = 0;
 
     for (uint32_t mask_bit_pos = 0; mask_bit_pos < kNumberOfBits; ++mask_bit_pos) {
         uint32_t mask_bit = (mask >> mask_bit_pos) & 0x0000'0001;
         if (mask_bit != 0x0000'0000) {
-            Register src_lsb = src & 0x0000'0001;
+            Register_idx src_lsb = src & 0x0000'0001;
 
             if (src_lsb != 0) {
-                result |= (static_cast<Register>(0x0000'0001) << mask_bit_pos);
+                result |= (static_cast<Register_idx>(0x0000'0001) << mask_bit_pos);
             }
             src >>= 1;
         }
@@ -167,23 +167,23 @@ Register CPU::pdep_emulate(Register src, uint32_t mask) {
     return result;
 }
 
-Register CPU::cls_emulate(Register x) {
-    Register sign = (x >> kNumberOfBits - 1) & 0x0000'0001;
+Register_idx CPU::cls_emulate(Register_idx x) {
+    Register_idx sign = (x >> kNumberOfBits - 1) & 0x0000'0001;
 
     uint32_t count = 0;
     for (int pos = kNumberOfBits - 1; pos >= 0; --pos) {
-        Register bit = (x >> pos) & 0x0000'0001;
+        Register_idx bit = (x >> pos) & 0x0000'0001;
         if (bit == sign) {
             ++count;
             if (count >= kNumberOfBits - 1) {
-                return static_cast<Register>(0x0000'001F);
+                return static_cast<Register_idx>(0x0000'001F);
             }
         } else {
             break;
         }
     }
 
-    return static_cast<Register>(count);
+    return static_cast<Register_idx>(count);
 }
 
 DecodedInstr CPU::decode_opcode(Instruction instr) {
@@ -241,7 +241,7 @@ void CPU::dump_regs() const {
     std::cout << "----- CPU REGISTER DUMP -----\n";
     std::cout << "PC = 0x" << std::hex << pc_ << std::dec << "\n";
 
-    for (Register i = 0; i < static_cast<Register>(kNumberOfRegisters); ++i) {
+    for (Register_idx i = 0; i < static_cast<Register_idx>(kNumberOfRegisters); ++i) {
         std::cout << "X" << i << " = 0x" << std::hex << regs_[i] << std::dec;
         if ((i % kInstructionBytes) == 3) std::cout << "\n"; else std::cout << "\t";
     }
@@ -256,7 +256,7 @@ void CPU::exec_j(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_syscall(Instruction instr, Address &next_pc) {
-    Register code = static_cast<Register>(instr >> 6) & 0x0003'FFFF;
+    Register_idx code = static_cast<Register_idx>(instr >> 6) & 0x0003'FFFF;
 
     if (code == 0) {
         halted_ = true;
@@ -268,9 +268,9 @@ void CPU::exec_syscall(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_stp(Instruction instr, Address &next_pc) {
-    Register base = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt1 = static_cast<Register>((instr >> 16) & 0x0000'001F);
-    Register rt2 = static_cast<Register>((instr >> 11) & 0x0000'001F);
+    Register_idx base = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt1 = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
+    Register_idx rt2 = static_cast<Register_idx>((instr >> 11) & 0x0000'001F);
     Address offset = static_cast<Address>(instr & 0x0000'07FF);
 
     if (base >= kNumberOfRegisters
@@ -293,8 +293,8 @@ void CPU::exec_stp(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_rori(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rs = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx rd = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
     uint32_t imm5 = (instr >> 11) & 0x0000'001F;
 
     if (rd >= kNumberOfRegisters
@@ -308,8 +308,8 @@ void CPU::exec_rori(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_slti(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -324,8 +324,8 @@ void CPU::exec_slti(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_st(Instruction instr, Address &next_pc) {
-    Register base = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx base = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
     Address offset = static_cast<Address>(instr & 0x0000'FFFF);
 
     if (base >= kNumberOfRegisters
@@ -347,9 +347,9 @@ void CPU::exec_st(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_bdep(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rs1 = static_cast<Register>((instr >> 16) & 0x0000'001F);
-    Register rs2 = static_cast<Register>((instr >> 11) & 0x0000'001F);
+    Register_idx rd = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rs1 = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
+    Register_idx rs2 = static_cast<Register_idx>((instr >> 11) & 0x0000'001F);
 
     if (rd >= kNumberOfRegisters
         || rs1 >= kNumberOfRegisters
@@ -363,8 +363,8 @@ void CPU::exec_bdep(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_cls(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rs = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx rd = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
 
     if (rd >= kNumberOfRegisters
         || rs >= kNumberOfRegisters) {
@@ -377,9 +377,9 @@ void CPU::exec_cls(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_add(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
-    Register rd = static_cast<Register>((instr >> 11) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
+    Register_idx rd = static_cast<Register_idx>((instr >> 11) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters
@@ -393,8 +393,8 @@ void CPU::exec_add(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_bne(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -412,8 +412,8 @@ void CPU::exec_bne(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_beq(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters) {
@@ -431,8 +431,8 @@ void CPU::exec_beq(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_ld(Instruction instr, Address &next_pc) {
-    Register base = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
+    Register_idx base = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
     Address offset = static_cast<Address>(instr & 0x0000'FFFF);
 
     if (base >= kNumberOfRegisters
@@ -453,9 +453,9 @@ void CPU::exec_ld(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_and(Instruction instr, Address &next_pc) {
-    Register rs = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rt = static_cast<Register>((instr >> 16) & 0x0000'001F);
-    Register rd = static_cast<Register>((instr >> 11) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rt = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
+    Register_idx rd = static_cast<Register_idx>((instr >> 11) & 0x0000'001F);
 
     if (rs >= kNumberOfRegisters
         || rt >= kNumberOfRegisters
@@ -469,9 +469,9 @@ void CPU::exec_and(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_ssat(Instruction instr, Address &next_pc) {
-    Register rd = static_cast<Register>((instr >> 21) & 0x0000'001F);
-    Register rs = static_cast<Register>((instr >> 16) & 0x0000'001F);
-    Register imm5 = static_cast<Register>((instr >> 11) & 0x0000'001F);
+    Register_idx rd = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
+    Register_idx rs = static_cast<Register_idx>((instr >> 16) & 0x0000'001F);
+    Register_idx imm5 = static_cast<Register_idx>((instr >> 11) & 0x0000'001F);
 
     if (rd >= kNumberOfRegisters
         || rs >= kNumberOfRegisters) {
@@ -480,7 +480,7 @@ void CPU::exec_ssat(Instruction instr, Address &next_pc) {
         return;
     }
 
-    const Register N = imm5 & 0x1Fu;
+    const Register_idx N = imm5 & 0x1Fu;
     if (N == 0) {
         regs_[rd] = regs_[rs];
         return;
@@ -494,7 +494,7 @@ void CPU::exec_ssat(Instruction instr, Address &next_pc) {
     if (val < minv) val = minv;
     if (val > maxv) val = maxv;
 
-    regs_[rd] = static_cast<Register>(static_cast<int32_t>(val));
+    regs_[rd] = static_cast<Register_idx>(static_cast<int32_t>(val));
 }
 
 } // namespace Sim
