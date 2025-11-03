@@ -106,25 +106,23 @@ Instruction CPU::read(Address addr) {
         return 0;
     }
 
-    Opcode  b0 = memory_[addr];
-    Opcode  b1 = memory_[addr + 1];
-    Opcode  b2 = memory_[addr + 2];
-    Opcode  b3 = memory_[addr + 3];
+    Instruction word = 0;
+    std::memcpy(&word, memory_.data() + addr, kInstructionBytes);
 
-    return static_cast<Instruction>((b0) | (b1 << 8) | (b2 << 16) | (b3 << 24));
+    return static_cast<Instruction>(word);
 }
+
 
 void CPU::write(Address addr, uint32_t value) {
     size_t need = static_cast<size_t>(addr) + kInstructionBytes;
     if (need > memory_.size()) {
         memory_.resize(need, 0);
     }
+    Instruction word = value;
 
-    memory_[addr]     = static_cast<Opcode>(value & 0x0000'00FF);
-    memory_[addr + 1] = static_cast<Opcode>((value >> 8) & 0x0000'00FF);
-    memory_[addr + 2] = static_cast<Opcode>((value >> 16) & 0x0000'00FF);
-    memory_[addr + 3] = static_cast<Opcode>((value >> 24) & 0x0000'00FF);
+    std::memcpy(memory_.data() + addr, &word, kInstructionBytes);
 }
+
 
 Opcode CPU::opcode_of(Instruction instr) {
     return (static_cast<Opcode>((instr >> 26) & 0x0000'003F));
@@ -256,16 +254,22 @@ void CPU::exec_j(Instruction instr, Address &next_pc) {
 }
 
 void CPU::exec_syscall(Instruction instr, Address &next_pc) {
-    Register_idx code = static_cast<Register_idx>(instr >> 6) & 0x0003'FFFF;
+    const Register syscall_num = static_cast<Register>((instr >> 6) & 0x0003'FFFF);
 
-    if (code == 0) {
-        halted_ = true;
-    } else if (code == 1) {
-        std::cout << regs_[0] << "\n";
-    } else {
-        std::cerr << "syscall: unhandled code " << code << "\n";
+    switch (syscall_num) {
+        case 0:
+            halted_ = true;
+            break;
+        case 1:
+            std::cout << regs_[0] << "\n";
+            break;
+        default:
+            std::cerr << "syscall: unhandled code " << syscall_num << "\n";
+            halted_ = true;
+            break;
     }
 }
+
 
 void CPU::exec_stp(Instruction instr, Address &next_pc) {
     Register_idx base = static_cast<Register_idx>((instr >> 21) & 0x0000'001F);
