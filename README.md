@@ -19,16 +19,14 @@ The project includes two main components:
 
 ### Build Steps
 
-Clone the repository (or simply navigate to your project directory if it's not a git repo):
+Clone the repository:
 ```bash
-# If you have a git repository:
-git clone <your_repository_url>
-cd <your_project_directory>
+git clone git@github.com:rhagewannakiss/toy-simulator.git
+cd toy-simulator
 ```
 Configure and build the C++ simulator using CMake:
 
 ```bash
-# Compile the project using all available CPU cores
 cmake --build build --parallel `nproc`
 ```
 
@@ -51,7 +49,7 @@ Example:
 ruby /src/asm/run_assembler.rb fib.asm fib.bin
 ```
 
-This will create fib.bin in your project's root directory.
+This will create fib.bin in project's root directory.
 
 2. Running the Simulator
 Execute the compiled simulator, providing the path to your binary file. You can also set initial register values and the starting program counter (PC) via command-line flags.
